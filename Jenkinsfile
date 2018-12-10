@@ -4,7 +4,7 @@
 microserviceBuilderPipeline {
   image = 'ace11002mqc91intms1'
   mavenImage = 'wwdemo/images:maven-lab'
-  chartFolder = 'IntMicSrvOne'
+  chartFolder = 'intmicsrvone'
   deployBranch = 'master'
   namespace = 'default'
 }
