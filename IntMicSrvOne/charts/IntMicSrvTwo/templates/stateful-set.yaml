@@ -13,36 +13,56 @@
 # limitations under the License.
 
 {{- if .Values.queueManagerEnabled }}
-{{- include "sch.config.init" (list . "ibm-ace.sch.chart.config.values") }}
 {{ $pvcName := .Values.dataPVC.name }}
-{{ $statefulSetName := include "sch.names.statefulSetName" (list .) }}
-{{ $volumeClaimTemplateName := include "sch.names.volumeClaimTemplateName" (list . $pvcName $statefulSetName) }}
+{{ $statefulSetName := include "fullname" . }}
 {{ $serverName := .Values.integrationServer.name | default .Release.Name | replace "-" "" }}
 apiVersion: apps/v1beta2
 kind: StatefulSet
 metadata:
   name: {{ $statefulSetName }}
   labels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 4 }}
+    app: {{ .Chart.Name }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
   annotations:
+    {{- if .Values.productionDeployment }}
+    appconnectenterprise: 'prod'
+    {{- else }}
     appconnectenterprise: 'dev'
-{{- if .Values.contentServerURL }}
-    appconnectenterpriseContentUrl: {{ index (splitList "?" (trim .Values.contentServerURL)) 0 | quote }}
-{{- end }}
+    {{- end }}
     serverName: {{ print $serverName | quote }}
 spec:
   selector:
     matchLabels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 6 }}
+      app: {{ .Chart.Name }}
+      chart: {{ .Chart.Name }}
+      release: {{ .Release.Name }}
+      heritage: {{ .Release.Service }}
   serviceName: acemq
   replicas: 1
   template:
     metadata:
       annotations:
-{{- include "sch.metadata.annotations.metering" (list . .sch.chart.metering) | indent 8 }}
+        {{- if .Values.devEdition }}
+        productName: IBM App Connect Enterprise for Developers (Free)
+        productID: IBMAppConnectEnterprise_f9e7010beec748fe98ff292138860707
+        productVersion: "11.0.0.2"
+        {{- else if .Values.productionDeployment }}
+        productName: IBM App Connect Enterprise (Chargeable)
+        productID: IBMAppConnectEnterprise_606f1a9feb4f4cbc85b17a637f6a6b24_chargeable
+        productVersion: "11.0.0.2"
+        {{- else }}
+        productName: IBM App Connect Enterprise (Non-production) (Chargeable)
+        productID: IBMAppConnectEnterprise_30fd0181a948441ebe3be59192171987_nonProd_chargeable
+        productVersion: "11.0.0.2"
+        {{- end }}
       name: {{ $statefulSetName }}
       labels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 8 }}
+        app: {{ .Chart.Name }}
+        chart: {{ .Chart.Name }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
     spec:
       affinity:
         nodeAffinity:
@@ -87,14 +107,6 @@ spec:
               value: {{ .Values.queueManager.name | default .Release.Name | replace "-" "" | quote }}
             - name: ACE_SERVER_NAME
               value: {{ print $serverName | quote }}
-            {{- if .Values.contentServerURL }}
-            - name: ACE_CONTENT_SERVER_URL
-              value: {{ index (splitList "?" (trim .Values.contentServerURL)) 0 | quote }}
-            - name: ACE_CONTENT_SERVER_NAME
-              value: {{ index (splitList ":" (index (splitList "/" (trim .Values.contentServerURL)) 2)) 0 | quote }}
-            - name: ACE_CONTENT_SERVER_TOKEN
-              value: {{ index (splitList "?" (trim .Values.contentServerURL)) 1 | quote }}
-            {{- end }}
             - name: LOG_FORMAT
               value: {{ .Values.log.format | default "json" | quote }}
             - name: MQ_ENABLE_METRICS
@@ -128,7 +140,7 @@ spec:
                   key: appPassword
             {{- end }}
           volumeMounts:
-            {{- if .Values.contentServerURL }}
+            {{- if or .Values.integrationServer.viewerusers .Values.integrationServer.adminusers }}
             - name: webusers
               mountPath: "/home/aceuser/initial-config/webusers"
             {{- end }}
@@ -161,12 +173,8 @@ spec:
               mountPath: "/home/aceuser/initial-config/setdbparms"
             {{- end }}
             {{- if .Values.persistence.enabled }}
-            - name: {{ $volumeClaimTemplateName }}
+            - name: {{ $pvcName }}
               mountPath: "/mnt/mqm"
-            {{- end }}
-            {{- if .Values.contentServerURL }}
-            - name: contentservertls
-              mountPath: "/home/aceuser/ssl"
             {{- end }}
           securityContext:
             allowPrivilegeEscalation: true
@@ -213,7 +221,7 @@ spec:
             requests:
 {{ toYaml .Values.acemq.resources.requests | indent 14 }}
       volumes:
-        {{- if .Values.contentServerURL }}
+        {{- if or .Values.integrationServer.viewerusers .Values.integrationServer.adminusers }}
         - name: webusers
           secret:
             secretName: {{ $statefulSetName }}
@@ -291,20 +299,15 @@ spec:
             - key: setdbparms
               path: setdbparms.txt
         {{- end }}
-        {{- if .Values.contentServerURL }}
-        - name: contentservertls
-          secret:
-            secretName: {{ index (splitList ":" (index (splitList "/" (trim .Values.contentServerURL)) 2)) 0 | quote }}
-            items:
-            - key: contentServerCACert
-              path: cacert.pem
-        {{- end }}
   volumeClaimTemplates:
   {{- if .Values.persistence.enabled }}
   - metadata:
-      name: {{ $volumeClaimTemplateName }}
+      name: {{ $pvcName }}
       labels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 8 }}
+        app: {{ .Chart.Name }}
+        chart: {{ .Chart.Name }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
     spec:
       {{- if .Values.persistence.useDynamicProvisioning }}
       # If present, use the storageClassName from the values.yaml, else use the

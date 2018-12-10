@@ -13,20 +13,23 @@
 # limitations under the License.
 
 {{- if not .Values.queueManagerEnabled }}
-{{- include "sch.config.init" (list . "ibm-ace.sch.chart.config.values") }}
-{{ $deploymentName := include "sch.names.fullName" (list .) }}
+{{ $deploymentName := include "fullname" . }}
 {{ $serverName := .Values.integrationServer.name | default .Release.Name | replace "-" "" }}
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: {{ $deploymentName }}
   labels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 4 }}
+    app: {{ .Chart.Name }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
   annotations:
+    {{- if .Values.productionDeployment }}
+    appconnectenterprise: 'prod'
+    {{- else }}
     appconnectenterprise: 'dev'
-{{- if .Values.contentServerURL }}
-    appconnectenterpriseContentUrl: {{ index (splitList "?" (trim .Values.contentServerURL)) 0 | quote }}
-{{- end }}
+    {{- end }}
     serverName: {{ print $serverName | quote }}
 spec:
   strategy:
@@ -37,10 +40,25 @@ spec:
   template:
     metadata:
       annotations:
-{{- include "sch.metadata.annotations.metering" (list . .sch.chart.metering) | indent 8 }}
+        {{- if .Values.devEdition }}
+        productName: IBM App Connect Enterprise for Developers (Free)
+        productID: IBMAppConnectEnterprise_f9e7010beec748fe98ff292138860707
+        productVersion: "11.0.0.2"
+        {{- else if .Values.productionDeployment }}
+        productName: IBM App Connect Enterprise (Chargeable)
+        productID: IBMAppConnectEnterprise_606f1a9feb4f4cbc85b17a637f6a6b24_chargeable
+        productVersion: "11.0.0.2"
+        {{- else }}
+        productName: IBM App Connect Enterprise (Non-production) (Chargeable)
+        productID: IBMAppConnectEnterprise_30fd0181a948441ebe3be59192171987_nonProd_chargeable
+        productVersion: "11.0.0.2"
+        {{- end }}
       name: {{ $deploymentName }}
       labels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 8 }}
+        app: {{ .Chart.Name }}
+        chart: {{ .Chart.Name }}
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
     spec:
       affinity:
         nodeAffinity:
@@ -67,12 +85,12 @@ spec:
           image: "{{ .Values.image.repository.aceonly }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-          - containerPort: {{ .Values.service.webuiPort }}
-            name: webui
-          - containerPort: {{ .Values.service.serverlistenerPort }}
-            name: ace-http
-          - containerPort: {{ .Values.service.serverlistenerTLSPort }}
-            name: ace-https
+            - containerPort: {{ .Values.service.webuiPort }}
+              name: webui
+            - containerPort: {{ .Values.service.serverlistenerPort }}
+              name: ace-http
+            - containerPort: {{ .Values.service.serverlistenerTLSPort }}
+              name: ace-https
           env:
             - name: LICENSE
               value: {{ .Values.license | quote }}
@@ -80,14 +98,6 @@ spec:
               value: "false"
             - name: ACE_SERVER_NAME
               value: {{ print $serverName | quote }}
-            {{- if .Values.contentServerURL }}
-            - name: ACE_CONTENT_SERVER_URL
-              value: {{ index (splitList "?" (trim .Values.contentServerURL)) 0 | quote }}
-            - name: ACE_CONTENT_SERVER_NAME
-              value: {{ index (splitList ":" (index (splitList "/" (trim .Values.contentServerURL)) 2)) 0 | quote }}
-            - name: ACE_CONTENT_SERVER_TOKEN
-              value: {{ index (splitList "?" (trim .Values.contentServerURL)) 1 | quote }}
-            {{- end }}
             - name: LOG_FORMAT
               value: {{ .Values.log.format | default "json" | quote }}
             - name: ACE_ENABLE_METRICS
@@ -107,7 +117,7 @@ spec:
                    key: truststorePassword
             {{- end }}
           volumeMounts:
-            {{- if .Values.contentServerURL }}
+            {{- if or .Values.integrationServer.viewerusers .Values.integrationServer.adminusers }}
             - name: webusers
               mountPath: "/home/aceuser/initial-config/webusers"
             {{- end }}
@@ -135,10 +145,6 @@ spec:
             - name: setdbparms
               mountPath: "/home/aceuser/initial-config/setdbparms"
             {{- end }}
-            {{- if .Values.contentServerURL }}
-            - name: contentservertls
-              mountPath: "/home/aceuser/ssl"
-            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
@@ -161,30 +167,30 @@ spec:
               - SYS_CHROOT
               - SETFCAP
           # Set liveness probe to determine if the Integration Server is running
-          #@DA removing livenessProbe:
-          #  exec:
-          #    command:
-          #    - chkacehealthy
-          #  initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-          #  periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-          #  timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
-          #  failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          livenessProbe:
+            exec:
+              command:
+              - chkacehealthy
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
           # Set readiness probe to determine if the Integration Server admin endpoint is running
-          #@DA removing readinessProbe:
-          #  exec:
-          #    command:
-          #    - chkaceready
-          #  initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-          #  periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-          #  timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
-          #  failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          readinessProbe:
+            exec:
+              command:
+              - chkaceready
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
           resources:
             limits:
 {{ toYaml .Values.aceonly.resources.limits | indent 14 }}
             requests:
 {{ toYaml .Values.aceonly.resources.requests | indent 14 }}
       volumes:
-        {{- if .Values.contentServerURL }}
+        {{- if or .Values.integrationServer.viewerusers .Values.integrationServer.adminusers }}
         - name: webusers
           secret:
             secretName: {{ $deploymentName }}
@@ -253,13 +259,5 @@ spec:
             items:
             - key: setdbparms
               path: setdbparms.txt
-        {{- end }}
-        {{- if .Values.contentServerURL }}
-        - name: contentservertls
-          secret:
-            secretName: {{ index (splitList ":" (index (splitList "/" (trim .Values.contentServerURL)) 2)) 0 | quote }}
-            items:
-            - key: contentServerCACert
-              path: cacert.pem
         {{- end }}
 {{- end }}

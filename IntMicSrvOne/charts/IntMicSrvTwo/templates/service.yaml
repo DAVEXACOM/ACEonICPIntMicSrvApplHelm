@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-{{- include "sch.config.init" (list . "ibm-ace.sch.chart.config.values") }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "sch.names.fullName" (list .) }}
+  name: {{ include "fullname" . }}
   labels:
-{{ include "sch.metadata.labels.standard" (list . "") | indent 4 }}
+    app: {{ .Chart.Name }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -45,5 +47,5 @@ spec:
     name: qmgr
   {{- end }}
   selector:
-    app: "{{ include "sch.names.appName" (list .) }}"
+    app: "{{ .Chart.Name }}"
     release: "{{ .Release.Name }}"
