@@ -2,9 +2,9 @@
 
 @Library('MicroserviceBuilder') _
 microserviceBuilderPipeline {
-  image = 'ace11002mqc91intms2'
+  image = 'ace11002mqc91intms1'
   mavenImage = 'wwdemo/images:maven-lab'
-  chartFolder = 'IntMicSrvCommon'
+  chartFolder = 'IntMicSrvOne'
   deployBranch = 'master'
   namespace = 'default'
 }
