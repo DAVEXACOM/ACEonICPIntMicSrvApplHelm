@@ -14,7 +14,7 @@
 
 {{- if .Values.metrics.enabled }}
 #{{ $name := include "fullname" . }}
-{ $name := Chart.Name . }}
+{ $name := default Chart.Name . }}
 {{ $serviceName := print $name "-a-m" }}
 apiVersion: v1
 kind: Service
