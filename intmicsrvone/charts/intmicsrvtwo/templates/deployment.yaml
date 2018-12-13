@@ -13,7 +13,8 @@
 # limitations under the License.
 
 {{- if not .Values.queueManagerEnabled }}
-{{ $deploymentName := include "fullname" . }}
+#{{ $deploymentName := include "fullname" . }}
+{{ $deploymentName := "intmicsrvtwo" }}
 {{ $serverName := .Values.integrationServer.name | default .Release.Name | replace "-" "" }}
 apiVersion: extensions/v1beta1
 kind: Deployment
