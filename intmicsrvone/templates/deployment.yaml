@@ -14,7 +14,8 @@
 
 {{- if not .Values.queueManagerEnabled }}
 #{{ $deploymentName := include "fullname" . }}
-{{ $deploymentName := "intmicsrvone" }}
+{{ $deploymentname := .Chart.Name }}
+#{{ $deploymentName := "intmicsrvone" }}
 {{ $serverName := .Values.integrationServer.name | default .Release.Name | replace "-" "" }}
 apiVersion: extensions/v1beta1
 kind: Deployment
